@@ -518,6 +518,8 @@ public class MainActivity extends Activity {
                 // v28：二维码按屏幅放大——模块尺寸 = min(可用宽, 可用高 62%) / 总模块数，
                 // 夹在 [4,24]。日志区撤掉后竖向空间全给码，手机更好对焦。
                 boolean[][] mods = QrCode.encode(payload);
+                int n = mods.length, quiet = 3;
+                android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
                 // v45：继续放大——高度占比 0.70、模块上限 32、宽边距 24（日志区撤掉后高度全给码）
                 int per = Math.min((dm.widthPixels - 24) / (n + 2 * quiet),
                         (int) (dm.heightPixels * 0.70) / (n + 2 * quiet));
