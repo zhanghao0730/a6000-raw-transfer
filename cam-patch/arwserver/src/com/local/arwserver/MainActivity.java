@@ -43,11 +43,11 @@ public class MainActivity extends Activity {
     private Button mainBtn;
     private Button qrBtn;
     private ScrollView scroller;
-    private String lastQrPayload;
-    // v42：密码设置模式（相机键盘输入：上/下改数字、左右移位、中央键保存、MENU 取消）
+    private String lastQrPayload;   // v34：payload 没变就不重画二维码（省掉每秒一次 QR 编码+Bitmap 分配）
+    // v43：软键盘密码编辑（文本框 + 确定/取消按钮）
     private boolean pwMode = false;
-    private final int[] pwDigits = {1, 2, 3, 4};
-    private int pwPos = 0;   // v34：payload 没变就不重画二维码（省掉每秒一次 QR 编码+Bitmap 分配）
+    private android.widget.EditText pwEdit;
+    private LinearLayout pwBox;
     private Handler ui;
     private Runnable refresher;
 
@@ -103,6 +103,38 @@ public class MainActivity extends Activity {
         statusLine.setTextColor(Color.WHITE);
         statusLine.setTextSize(13);
         panel.addView(statusLine);
+
+        // v43：软键盘密码编辑框（默认隐藏，「修改密码」按钮显示）
+        pwBox = new LinearLayout(this);
+        pwBox.setOrientation(LinearLayout.VERTICAL);
+        pwBox.setVisibility(View.GONE);
+        TextView pwHint = new TextView(this);
+        pwHint.setText("输入新密码（数字）：");
+        pwHint.setTextColor(Color.rgb(255, 240, 150));
+        pwHint.setTextSize(13);
+        pwBox.addView(pwHint);
+        pwEdit = new android.widget.EditText(this);
+        pwEdit.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        pwEdit.setTextColor(Color.WHITE);
+        pwEdit.setTextSize(16);
+        pwBox.addView(pwEdit);
+        LinearLayout pwRow = new LinearLayout(this);
+        pwRow.setOrientation(LinearLayout.HORIZONTAL);
+        pwRow.setGravity(Gravity.CENTER_HORIZONTAL);
+        Button pwOk = new Button(this);
+        pwOk.setText("确定");
+        pwOk.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { savePw(); }
+        });
+        Button pwCancel = new Button(this);
+        pwCancel.setText("取消");
+        pwCancel.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { exitPwMode(); }
+        });
+        pwRow.addView(pwOk);
+        pwRow.addView(pwCancel);
+        pwBox.addView(pwRow);
+        panel.addView(pwBox);
 
         // v28：面板不再放日志区（二维码下的 req 日志滚屏干扰扫码），腾出的空间给二维码。
         // logView 保留对象但不上屏，refresh/exitAll 的 setText 变成无操作。
@@ -217,7 +249,7 @@ public class MainActivity extends Activity {
     // 方向键/OK 交给面板 UI；左/右 = 切换二维码；其余任意键 = 退出并停服务
     public boolean onKeyDown(int keyCode, android.view.KeyEvent event) {
         int sc = event.getScanCode();
-        if (pwMode) return pwKey(keyCode, sc, event);
+        if (pwMode) return true;   // v43：编辑中忽略物理键，走软键盘
 
         // 中央键长按 = 进入密码设置（在 onKeyLongPress 里触发）
         if (isCenter(keyCode, sc) && event.getRepeatCount() == 0) {
@@ -268,49 +300,52 @@ public class MainActivity extends Activity {
     private static boolean isCenter(int kc, int sc){ return kc == android.view.KeyEvent.KEYCODE_DPAD_CENTER || kc == android.view.KeyEvent.KEYCODE_ENTER || sc == com.sony.scalar.sysutil.ScalarInput.ISV_KEY_ENTER; }
     private static boolean isMenu(int kc, int sc)  { return kc == android.view.KeyEvent.KEYCODE_MENU || sc == com.sony.scalar.sysutil.ScalarInput.ISV_KEY_MENU; }
 
-    // ===== v42：密码设置模式 =====
+    // ===== v43：软键盘密码编辑 =====
+
     private void enterPwMode() {
-        String cur = ServerThread.UNLOCK_PASSWORD;
-        for (int i = 0; i < 4; i++) {
-            int v = i < cur.length() ? (cur.charAt(i) - '0') : 0;
-            pwDigits[i] = (v >= 0 && v <= 9) ? v : 0;
-        }
-        pwPos = 0;
         pwMode = true;
-        qrView.setImageBitmap(null);
-        statusLine.setText("设密码：1 2 3 4\n上/下改数字 · 左/右移位 · 确认键=保存\nMENU=取消");
-        ui.postDelayed(new Runnable() { public void run() { drawPw(); } }, 50);
+        qrView.setVisibility(View.GONE);          // 编辑时收起二维码，腾出软键盘空间
+        pwBox.setVisibility(View.VISIBLE);
+        pwEdit.setText(ServerThread.UNLOCK_PASSWORD);
+        statusLine.setText("输入新密码，按「确定」保存");
+        pwEdit.requestFocus();
+        pwEdit.setSelection(pwEdit.getText().length());
+        try {
+            android.view.inputmethod.InputMethodManager imm =
+                    (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+            imm.showSoftInput(pwEdit, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
+            imm.toggleSoftInput(0, 0);            // 相机 IME 不弹时强制唤起一次
+        } catch (Throwable t) { Log.w("ARWSRV", "ime show: " + t); }
     }
 
-    private void drawPw() {
-        if (!pwMode) return;
-        StringBuilder sb = new StringBuilder("密码  ");
-        for (int i = 0; i < 4; i++) {
-            sb.append(i == pwPos ? "[" + pwDigits[i] + "]" : " " + pwDigits[i] + " ").append(' ');
+    private void savePw() {
+        String pw = pwEdit.getText().toString().trim();
+        if (pw.length() == 0 || pw.length() > 8) {
+            statusLine.setText("密码需 1-8 位数字");
+            return;
         }
-        statusLine.setText(sb.toString() + "\n上/下改 · 左/右移位 · 确认=保存\nMENU=取消");
+        for (int i = 0; i < pw.length(); i++) {
+            char c = pw.charAt(i);
+            if (c < '0' || c > '9') { statusLine.setText("密码只能是数字"); return; }
+        }
+        ServerThread.UNLOCK_PASSWORD = pw;
+        try {
+            getSharedPreferences("arwcfg", MODE_PRIVATE).edit().putString("pw", pw).commit();
+        } catch (Throwable t) { Log.w("ARWSRV", "save pw: " + t); }
+        exitPwMode();
+        refresh();
     }
 
-    private boolean pwKey(int keyCode, int sc, android.view.KeyEvent event) {
-        if (isCenter(keyCode, sc)) {                      // 确认 → 保存
-            StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < 4; i++) sb.append(pwDigits[i]);
-            String pw = sb.toString();
-            ServerThread.UNLOCK_PASSWORD = pw;
-            try {
-                getSharedPreferences("arwcfg", MODE_PRIVATE).edit()
-                        .putString("pw", pw).commit();
-            } catch (Throwable t) { Log.w("ARWSRV", "save pw: " + t); }
-            pwMode = false;
-            refresh();
-            return true;
-        }
-        if (isMenu(keyCode, sc)) { pwMode = false; refresh(); return true; }   // 取消
-        if (isUp(keyCode, sc))    { pwDigits[pwPos] = (pwDigits[pwPos] + 1) % 10; drawPw(); return true; }
-        if (isDown(keyCode, sc))  { pwDigits[pwPos] = (pwDigits[pwPos] + 9) % 10; drawPw(); return true; }
-        if (isRight(keyCode, sc)) { pwPos = (pwPos + 1) % 4; drawPw(); return true; }
-        if (isLeft(keyCode, sc))  { pwPos = (pwPos + 3) % 4; drawPw(); return true; }
-        return true;                                      // 设置模式内其他键一律忽略
+    private void exitPwMode() {
+        pwMode = false;
+        pwBox.setVisibility(View.GONE);
+        qrView.setVisibility(View.VISIBLE);
+        try {
+            android.view.inputmethod.InputMethodManager imm =
+                    (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+            imm.hideSoftInputFromWindow(pwEdit.getWindowToken(), 0);
+        } catch (Throwable t) { }
+        refresh();
     }
 
     /** 手动切换二维码（屏上按钮 / 左右方向键都会走这里） */

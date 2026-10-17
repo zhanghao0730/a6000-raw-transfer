@@ -1,5 +1,5 @@
 HTTP 分帧 + 下载链路验证 —— 真实 ServerThread.java / Thumbs.java（v22）
-时间: Sat Oct 17 22:17:16 CST 2026
+时间: Sat Oct 17 22:26:38 CST 2026
 java: 21.0.9   os: Windows 11
 user.dir: X:/
 相册根: X:\sdcard\DCIM   存在=true
@@ -79,7 +79,7 @@ user.dir: X:/
 
 --- T9  /f/ 原文件下载（100MSDCF/DSC00001.ARW，25657344 字节） ---
     [srv] req GET /f/100MSDCF/DSC00001.ARW
-       HTTP/1.1 200 OK  clen=25657344  body=25657344  sha256=a30dd6dc62809193...  33 ms（回环）
+       HTTP/1.1 200 OK  clen=25657344  body=25657344  sha256=a30dd6dc62809193...  30 ms（回环）
   [PASS] T9a 200
   [PASS] T9b Content-Length == 文件长度 25657344
   [PASS] T9c 收到的字节数 == 文件长度
@@ -108,7 +108,7 @@ user.dir: X:/
 
 --- T11 /p/ RAW 原生预览直出（v21 抽取器走真实代码路径） ---
     [srv] req GET /p/100MSDCF/DSC00001.ARW
-       HTTP/1.1 200 OK  clen=1162339  body=1162339  sha256=ebae1d7d6aba494f...  20 ms
+       HTTP/1.1 200 OK  clen=1162339  body=1162339  sha256=ebae1d7d6aba494f...  15 ms
   [PASS] T11a 200 image/jpeg
   [PASS] T11b 长度 == 内嵌预览长度 1162339
   [PASS] T11c sha256 与独立实现(Python)抽出的内嵌预览完全一致
@@ -131,8 +131,8 @@ user.dir: X:/
     [srv] conn close after 2 req
 
 --- T13 缓存键：同名同长同 mtime、不同目录的两个 ARW 必须各自成缓存 ---
-       100MSDCF/DSC00009.ARW  len=8781824  mtime=1792246610700
-       101MSDCF/DSC00009.ARW  len=8781824  mtime=1792246610700
+       100MSDCF/DSC00009.ARW  len=8781824  mtime=1792247174721
+       101MSDCF/DSC00009.ARW  len=8781824  mtime=1792247174721
        起始 arwjpg 缓存文件数 = 1
   [PASS] T13a 两个夹具同名同长（否则测不出旧 bug）
   [PASS] T13b 两个夹具 mtime 也相同
@@ -147,7 +147,7 @@ user.dir: X:/
 --- T14 /z 打包下载：zip 结构 + 内容 sha256 + Content-Length 精确性 ---
     [srv] req GET /z
     [srv] conn close after 0 req
-       HTTP/1.1 200 OK  clen=1162479  body=1162479  cd='attachment; filename="DCIM-20261017-2217.zip"'
+       HTTP/1.1 200 OK  clen=1162479  body=1162479  cd='attachment; filename="DCIM-20261017-2226.zip"'
   [PASS] T14a 200 application/zip
   [PASS] T14b 声明的 Content-Length == 实收字节数（少算会截断、多算会挂住浏览器）
   [PASS] T14c 附件名形如 DCIM-yyyyMMdd-HHmm.zip
