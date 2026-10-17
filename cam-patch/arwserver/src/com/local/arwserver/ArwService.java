@@ -42,7 +42,7 @@ public class ArwService extends Service implements ServerThread.Listener {
         StringBuffer sb = new StringBuffer();
         for (int i = 0; i < ips.size(); i++) {
             if (i > 0) sb.append("  ");
-            sb.append(ips.elementAt(i)).append(":8080");
+            sb.append(ips.elementAt(i));   // v44：端口不再上屏（网址在二维码里，含完整端口）
         }
         return sb.toString();
     }

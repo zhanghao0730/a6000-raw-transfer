@@ -48,6 +48,7 @@ public class MainActivity extends Activity {
     private boolean pwMode = false;
     private android.widget.EditText pwEdit;
     private LinearLayout pwBox;
+    private TextView pwHint;
     private Handler ui;
     private Runnable refresher;
 
@@ -79,12 +80,6 @@ public class MainActivity extends Activity {
         panel.setPadding(10, 6, 10, 10);
         panel.setBackgroundColor(Color.argb(190, 0, 0, 0));
 
-        TextView title = new TextView(this);
-        title.setText("ARW Server v43");
-        title.setTextColor(Color.rgb(120, 220, 120));
-        title.setTextSize(17);
-        panel.addView(title);
-
         // v31：二维码紧跟标题放最顶 —— 上/下键滚动面板时按钮可以滚出视野，码吃满可用高度
         LinearLayout qrWrap = new LinearLayout(this);
         qrWrap.setOrientation(LinearLayout.VERTICAL);
@@ -108,7 +103,7 @@ public class MainActivity extends Activity {
         pwBox = new LinearLayout(this);
         pwBox.setOrientation(LinearLayout.VERTICAL);
         pwBox.setVisibility(View.GONE);
-        TextView pwHint = new TextView(this);
+        pwHint = new TextView(this);
         pwHint.setText("输入新密码（数字）：");
         pwHint.setTextColor(Color.rgb(255, 240, 150));
         pwHint.setTextSize(13);
@@ -136,11 +131,12 @@ public class MainActivity extends Activity {
         pwBox.addView(pwRow);
         panel.addView(pwBox);
 
-        // v28：面板不再放日志区（二维码下的 req 日志滚屏干扰扫码），腾出的空间给二维码。
-        // logView 保留对象但不上屏，refresh/exitAll 的 setText 变成无操作。
+        // v44：恢复日志区上屏 —— 手机连接/请求入口的日志段（req GET / 等），面板只留
+        // 按钮 + 二维码 + 连接入口信息 + 这段日志，其余文字全部去掉
         logView = new TextView(this);
         logView.setTextColor(Color.rgb(160, 255, 160));
         logView.setTextSize(11);
+        panel.addView(logView);
 
         mainBtn = new Button(this);
         mainBtn.setTextColor(Color.WHITE);
@@ -249,15 +245,20 @@ public class MainActivity extends Activity {
     // 方向键/OK 交给面板 UI；左/右 = 切换二维码；其余任意键 = 退出并停服务
     public boolean onKeyDown(int keyCode, android.view.KeyEvent event) {
         int sc = event.getScanCode();
-        if (pwMode) return true;   // v43：编辑中忽略物理键，走软键盘
+        if (pwMode) {
+            // v44：MENU = 返回键 —— 编辑中返回 = 取消编辑、收起软键盘
+            if (isMenu(keyCode, sc)) { exitPwMode(); }
+            return true;   // 编辑中其余物理键忽略，走软键盘
+        }
+
+        // v44：MENU = 返回键（面板上按 = 退出 App，与返回键行为一致）
+        if (isMenu(keyCode, sc)) {
+            exitAll();
+            return true;
+        }
 
         // 中央键长按 = 进入密码设置（在 onKeyLongPress 里触发）
         if (isCenter(keyCode, sc) && event.getRepeatCount() == 0) {
-            event.startTracking();
-            return true;
-        }
-        // MENU 长按 = 退出 App（在 onKeyLongPress 里触发）
-        if (isMenu(keyCode, sc) && event.getRepeatCount() == 0) {
             event.startTracking();
             return true;
         }
@@ -307,7 +308,7 @@ public class MainActivity extends Activity {
         qrView.setVisibility(View.GONE);          // 编辑时收起二维码，腾出软键盘空间
         pwBox.setVisibility(View.VISIBLE);
         pwEdit.setText(ServerThread.UNLOCK_PASSWORD);
-        statusLine.setText("输入新密码，按「确定」保存");
+        pwHint.setText("输入新密码（数字），按「确定」保存：");
         pwEdit.requestFocus();
         pwEdit.setSelection(pwEdit.getText().length());
         try {
@@ -321,12 +322,12 @@ public class MainActivity extends Activity {
     private void savePw() {
         String pw = pwEdit.getText().toString().trim();
         if (pw.length() == 0 || pw.length() > 8) {
-            statusLine.setText("密码需 1-8 位数字");
+            pwHint.setText("密码需 1-8 位数字");
             return;
         }
         for (int i = 0; i < pw.length(); i++) {
             char c = pw.charAt(i);
-            if (c < '0' || c > '9') { statusLine.setText("密码只能是数字"); return; }
+            if (c < '0' || c > '9') { pwHint.setText("密码只能是数字"); return; }
         }
         ServerThread.UNLOCK_PASSWORD = pw;
         try {
@@ -431,7 +432,7 @@ public class MainActivity extends Activity {
     private void refresh() {
         if (exiting) return;   // 退出流程接管画面，停止每秒刷新链
         if (!ArwService.running) {
-            statusLine.setText("STOPPED");
+            statusLine.setText("");
             mainBtn.setText("启动服务");
             qrView.setImageBitmap(null);
             qrCaption.setText("");
@@ -440,18 +441,15 @@ public class MainActivity extends Activity {
             return;
         }
 
-        String s = "RUNNING :8080 · 解锁密码 " + ServerThread.UNLOCK_PASSWORD + "\n" + ArwService.ipsText();
-        if (HotspotController.ssid != null) {
-            s = "热点 " + HotspotController.ssid + "\n密码 " + HotspotController.psk + "\n" + s;
-        } else {
-            s = "热点：" + HotspotController.statusText() + "\n" + s;
-        }
-        if (HotspotController.staConnected) {
-            s = "手机已接入 ✓\n" + s;
-        }
+        // v44：面板文字精简 —— 只留连接入口（IP + 接入状态 + 失败提示），
+        // 热点名称/热点密码/端口号/解锁密码全部不再显示
+        String s = "";
+        if (HotspotController.staConnected) s = "手机已接入 ✓";
+        String ips = ArwService.ipsText();
+        if (ips.length() > 0) s = (s.length() > 0 ? s + "\n" : "") + ips;
         String fatal = HotspotController.fatalText();
         if (fatal != null && fatal.length() > 0) {
-            s = "热点失败：" + fatal + "\n" + s;
+            s = "热点失败：" + fatal + (s.length() > 0 ? "\n" + s : "");
         }
         // v41：每秒刷新只在文本变化时 setText——TextView.setText 即使文本相同
         // 也会触发 invalidate+relayout，整面板每秒重排是最大的面板侧空转开销
