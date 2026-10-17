@@ -94,10 +94,11 @@ public class MainActivity extends Activity {
         qrWrap.addView(qrCaption);
         panel.addView(qrWrap);
 
+        // v46：状态行不上屏 —— 面板文字只留二维码下方的扫码提示（qrCaption）。
+        // statusLine 保留对象，refresh/exitAll 的 setText 变成无操作。
         statusLine = new TextView(this);
         statusLine.setTextColor(Color.WHITE);
         statusLine.setTextSize(13);
-        panel.addView(statusLine);
 
         // v43：软键盘密码编辑框（默认隐藏，「修改密码」按钮显示）
         pwBox = new LinearLayout(this);
