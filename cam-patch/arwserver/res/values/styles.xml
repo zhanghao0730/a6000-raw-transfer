@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- 仿 Film Studio Theme.Transparent：透明窗口悬浮在原生取景上 -->
+    <style name="ArwTheme" parent="@android:style/Theme">
+        <item name="android:windowBackground">@drawable/background_transparent</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowFullscreen">true</item>
+    </style>
+</resources>

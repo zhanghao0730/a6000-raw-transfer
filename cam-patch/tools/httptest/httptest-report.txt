@@ -1,0 +1,219 @@
+HTTP 分帧 + 下载链路验证 —— 真实 ServerThread.java / Thumbs.java（v22）
+时间: Sat Oct 17 21:54:17 CST 2026
+java: 21.0.9   os: Windows 11
+user.dir: X:/
+相册根: X:\sdcard\DCIM   存在=true
+缓存目录: X:\sdcard\.arwthumbs
+
+    [srv] HTTP server on :18080
+
+--- T1  keep-alive：同一条 TCP 连接连打 5 个请求 ---
+    [srv] req GET /desc.xml
+       r1 = HTTP/1.1 200 OK  conn=keep-alive  clen=726
+  [PASS] T1a /desc.xml 返回 200
+  [PASS] T1b 响应头广告 keep-alive
+  [PASS] T1c Content-Length 与实际字节数严格一致
+  [PASS] T1d /desc.xml 是 MediaServer 设备描述
+    [srv] req GET /scpd.xml
+  [PASS] T1e 同连接第 2 个请求 /scpd.xml 拿到真实响应（BufferedReader 没吞掉下一请求）
+    [srv] req GET /
+       r3 = HTTP/1.1 200 OK  clen=5146  body=5146
+  [PASS] T1f 同连接第 3 个请求 / 出相册页
+  [PASS] T1g 相册页 Content-Length 按字节算（页面含大量中文 UTF-8）
+  [PASS] T1h 页面为精简版相册（v37 起页面不带版本字样）
+    [srv] req GET /nope
+  [PASS] T1i 404 不破连接（仍 keep-alive）
+    [srv] req GET /desc.xml
+  [PASS] T1j 404 之后的第 5 个请求照常服务
+    [srv] conn close after 5 req
+
+--- T2  pipeline：两个请求写在同一个 write() 里 ---
+    [srv] req GET /desc.xml
+    [srv] req GET /scpd.xml
+  [PASS] T2a 第 1 个响应 200
+  [PASS] T2b 第 2 个响应 200 且内容正确（第二个请求的字节没被预读吃掉）
+    [srv] conn close after 2 req
+
+--- T3  客户端显式 Connection: close ---
+    [srv] req GET /desc.xml
+    [srv] conn close after 0 req
+  [PASS] T3a 200
+  [PASS] T3b 响应头回 Connection: close（不是 keep-alive）
+  [PASS] T3c 服务端随后真的关闭了连接（读到 EOF）
+
+--- T4  HTTP/1.0（没写 Connection，默认应短连接） ---
+    [srv] req GET /desc.xml
+    [srv] conn close after 0 req
+  [PASS] T4a 200
+  [PASS] T4b 响应头是 close
+  [PASS] T4c HTTP/1.0 之后服务端关闭
+
+--- T5  HEAD 只发头，之后的请求不受影响 ---
+    [srv] req HEAD /scpd.xml
+  [PASS] T5a HEAD 200 且声明了 Content-Length > 0
+  [PASS] T5b HEAD 之后连接仍 keep-alive
+    [srv] req GET /desc.xml
+       r2 = HTTP/1.1 200 OK  clen=726
+  [PASS] T5c HEAD 之后 GET 仍能对上帧（服务端没发体、客户端没读体，两侧同步）
+    [srv] conn close after 2 req
+
+--- T6  POST（带 Content-Length 的 SOAP）之后复用同连接 ---
+    [srv] req POST /ctl/CD
+    [srv] soap Browse
+  [PASS] T6a SOAP Browse 返回 200 且是 BrowseResponse
+  [PASS] T6b Browse 结果里包含夹具目录 100MSDCF
+    [srv] req GET /desc.xml
+  [PASS] T6c POST 体被精确消费（后续请求没串帧）
+    [srv] conn close after 2 req
+
+--- T7  /z 打包下载必须收掉连接（Content-Length 事先算好，不能复用） ---
+    [srv] req GET /z
+    [srv] conn close after 0 req
+  [PASS] T7a 没选文件时 400
+  [PASS] T7b 响应头是 close
+  [PASS] T7c 服务端随后关闭
+
+--- T8  单连接请求上限（防客户端赖着不走） ---
+       上限前实际服务了 200 个请求（服务端本次连接共回调 224 次）
+  [PASS] T8a 恰好 200 个请求后断开（代码里的 200 上限生效）
+
+--- T9  /f/ 原文件下载（100MSDCF/DSC00001.ARW，25657344 字节） ---
+    [srv] req GET /f/100MSDCF/DSC00001.ARW
+       HTTP/1.1 200 OK  clen=25657344  body=25657344  sha256=a30dd6dc62809193...  39 ms（回环）
+  [PASS] T9a 200
+  [PASS] T9b Content-Length == 文件长度 25657344
+  [PASS] T9c 收到的字节数 == 文件长度
+  [PASS] T9d 下载内容的 sha256 与源文件一致
+  [PASS] T9e Content-Type 是 application/octet-stream
+  [PASS] T9f 带 Content-Disposition 附件名
+  [PASS] T9g 声明 Accept-Ranges: bytes（下载器可续传）
+  [PASS] T9h 大文件下载后连接仍是 keep-alive
+    [srv] req GET /desc.xml
+  [PASS] T9i 25MB 下载之后同连接的下一个请求仍能对上帧
+    [srv] conn close after 2 req
+
+--- T10 Range 断点续传 ---
+    [srv] req GET /f/100MSDCF/DSC00001.ARW range
+       HTTP/1.1 206 Partial Content  clen=100  cr='bytes 100-199/25657344'
+  [PASS] T10a 206 Partial Content
+  [PASS] T10b Content-Length == 100
+  [PASS] T10c Content-Range == bytes 100-199/25657344
+  [PASS] T10d 这 100 字节与源文件同偏移处的字节完全一致
+    [srv] req GET /desc.xml
+  [PASS] T10e 206 之后连接复用正常
+    [srv] req GET /f/100MSDCF/DSC00001.ARW range
+  [PASS] T10f 起点越界 → 416 Range Not Satisfiable
+  [PASS] T10g 416 之后连接仍可复用
+    [srv] conn close after 3 req
+
+--- T11 /p/ RAW 原生预览直出（v21 抽取器走真实代码路径） ---
+    [srv] req GET /p/100MSDCF/DSC00001.ARW
+       HTTP/1.1 200 OK  clen=1162339  body=1162339  sha256=ebae1d7d6aba494f...  17 ms
+  [PASS] T11a 200 image/jpeg
+  [PASS] T11b 长度 == 内嵌预览长度 1162339
+  [PASS] T11c sha256 与独立实现(Python)抽出的内嵌预览完全一致
+  [PASS] T11d 内容是合法 JPEG（FFD8FF 开头 / FFD9 结尾）
+  [PASS] T11e 带 Cache-Control: max-age=86400（手机端不用反复拉）
+  [PASS] T11f /p/ 之后连接仍 keep-alive
+    [srv] req GET /p/100MSDCF/DSC00001.ARW
+  [PASS] T11g 同一文件第二次请求（arwjpg 缓存命中）sha256 一致
+    [srv] req GET /p/100MSDCF/DSC00002.JPG
+  [PASS] T11h JPEG 源 → 原文件直出（v27 零计算）：200 + sha256 与原文件一致
+  [PASS] T11i JPEG 源直出之后连接仍 keep-alive
+    [srv] conn close after 3 req
+
+--- T12 /t/ 缩略图分支（桌面桩不做真实解码，预期 404，只验不破连接） ---
+    [srv] req GET /t/100MSDCF/DSC00001.ARW
+  [PASS] T12a 桩环境下 404（BitmapFactory 桩返回 null）
+  [PASS] T12b 404 之后连接仍 keep-alive
+    [srv] req GET /desc.xml
+  [PASS] T12c 之后请求照常
+    [srv] conn close after 2 req
+
+--- T13 缓存键：同名同长同 mtime、不同目录的两个 ARW 必须各自成缓存 ---
+       100MSDCF/DSC00009.ARW  len=8781824  mtime=1792245228377
+       101MSDCF/DSC00009.ARW  len=8781824  mtime=1792245228377
+       起始 arwjpg 缓存文件数 = 1
+  [PASS] T13a 两个夹具同名同长（否则测不出旧 bug）
+  [PASS] T13b 两个夹具 mtime 也相同
+    [srv] req GET /p/100MSDCF/DSC00009.ARW
+  [PASS] T13c 第一个文件抽出的预览 sha256 正确
+  [PASS] T13d 新增 1 份 arwjpg 缓存
+    [srv] req GET /p/101MSDCF/DSC00009.ARW
+  [PASS] T13e 另一个目录的同名文件也能出预览
+  [PASS] T13f ★ 缓存键含绝对路径：又新增 1 份（旧版按文件名做键时这里只会是 2）
+    [srv] conn close after 2 req
+
+--- T14 /z 打包下载：zip 结构 + 内容 sha256 + Content-Length 精确性 ---
+    [srv] req GET /z
+    [srv] conn close after 0 req
+       HTTP/1.1 200 OK  clen=1162479  body=1162479  cd='attachment; filename="DCIM-20261017-2154.zip"'
+  [PASS] T14a 200 application/zip
+  [PASS] T14b 声明的 Content-Length == 实收字节数（少算会截断、多算会挂住浏览器）
+  [PASS] T14c 附件名形如 DCIM-yyyyMMdd-HHmm.zip
+  [PASS] T14d 响应头是 close
+  [PASS] T14e 服务端没多发一个字节（读完 Content-Length 后立即 EOF）
+       zip: entries=1  name=100MSDCF_DSC00002.JPG  method=0  size=1162339  sha256=ebae1d7d6aba494f...
+  [PASS] T14f zip 里恰好 1 个条目
+  [PASS] T14g 条目名是 目录_文件名
+  [PASS] T14h 条目是 STORED（相机端不压，省 CPU）
+  [PASS] T14i 条目大小 == 源文件大小
+  [PASS] T14j 条目内容 sha256 == 源文件 sha256
+
+--- T15 相册首页 / 目录过滤 / 路径穿越 ---
+    [srv] req GET /
+  [PASS] T15a 首页 200 text/html
+  [PASS] T15b 首页是日期分组页（按日期 + /?date= 链接）
+  [PASS] T15c 日期卡片链接可解析
+    [srv] req GET /
+  [PASS] T15d 日期页统计到 4 张 · RAW 3 · JPEG 1
+  [PASS] T15e 卡片列出夹具文件名
+  [PASS] T15f 卡片缩略图走 /x/、预览走 /p/、下载走 /f/
+  [PASS] T15g 网格页含 RAW/JPG 统计与下载链接
+    [srv] req GET /
+  [PASS] T15h 非 HTML 请求走纯文本清单
+    [srv] req GET /d/101MSDCF
+  [PASS] T15i /d/101MSDCF 只列该目录（1 张）
+  [PASS] T15j /d/101MSDCF 不混入 100MSDCF 的卡片
+    [srv] req GET /d/..
+  [PASS] T15k /d/.. 被拒（路径穿越）
+    [srv] req GET /f/100MSDCF/../../etc/passwd
+  [PASS] T15l /f/ 里的穿越尝试被拒
+    [srv] req GET /desc.xml
+  [PASS] T15m 一串异常路径之后连接仍可用
+    [srv] conn close after 7 req
+
+--- T16 /x/ EXIF 小图直出（零解码零编码，ARW = 12054B 现成小图） ---
+    [srv] req GET /x/100MSDCF/DSC00001.ARW
+       HTTP/1.1 200 OK  clen=12054  sha256=8ed6dcfb1ad90b83...
+  [PASS] T16a 200 image/jpeg
+  [PASS] T16b 长度 == EXIF 小图 12054 字节（独立 Python 解析器实测值）
+  [PASS] T16c 内容是合法 JPEG（FFD8 开头 / FFD9 结尾）
+  [PASS] T16d 带 Cache-Control: max-age=86400
+  [PASS] T16e /x/ 之后连接仍 keep-alive
+    [srv] req GET /x/100MSDCF/DSC00001.ARW
+  [PASS] T16f 第二次请求（.arwth 磁盘缓存命中）sha256 一致
+    [srv] req GET /x/100MSDCF/DSC00002.JPG
+  [PASS] T16g JPEG 源（桩无 EXIF → 回落 /t/ → 桩不解码）404，连接不破
+    [srv] conn close after 3 req
+
+--- T17 日期锁定：非最新日期 403 → 密码解锁 → 放行 ---
+       旧日期 = 2026-10-07
+    [srv] req GET /f/101MSDCF/DSC00009.ARW
+  [PASS] T17a 非最新日期 /f/ → 403 该日期未解锁
+    [srv] req GET /
+  [PASS] T17b 未解锁日期页 → 密码页
+    [srv] req GET /unlock
+  [PASS] T17c 错误密码 → 密码页带错误提示
+    [srv] req GET /unlock
+  [PASS] T17d 正确密码 → 302 跳转日期页
+    [srv] req GET /f/101MSDCF/DSC00009.ARW
+  [PASS] T17e 解锁后 /f/ 放行（200 + 源文件大小）
+    [srv] req GET /z
+    [srv] conn close after 5 req
+  [PASS] T17f 解锁后 /z 打包放行
+    [srv] server thread exit
+
+================================
+结果:  PASS 98    FAIL 0
+================================

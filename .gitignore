@@ -1,0 +1,57 @@
+# ===== 大二进制 / 可重新获取的资产 =====
+*.zip
+*.7z
+*.dmg
+*.tar.gz
+*.apk.idsig
+__pycache__/
+
+# ===== WorkBuddy 内部（记忆/缓存，不进库）=====
+.workbuddy/
+
+# ===== 逆向参考（第三方产物，只读，不入库）=====
+imagingedge-ref/
+pmca/
+pmca-src/
+film-studio-install/
+fw/lib/
+fw/libs/
+fw/extract/
+fw/SmartRemote.dex
+fw/backup_CN2.txt
+
+# ===== 相机固件原包 / 解包产物（可从 dmg 重生成）=====
+fw/fw321/
+fw/fw-321-unpacked.7z
+fw/Update_ILCE6000V321.dmg
+fw/tmp/
+
+# ===== 测试基准与沙盒（大文件，本地保留）=====
+cam-patch/test.arw
+cam-patch/test_sd.arw
+cam-patch/test_http.jpg
+cam-patch/test_sd.jpg
+cam-patch/tools/httptest/_drive/
+cam-patch/tools/httptest/out*/
+
+# ===== 构建中间件 =====
+cam-patch/arwserver/classes*
+cam-patch/arwserver/*.jar
+cam-patch/arwserver/unsigned.apk
+cam-patch/arwserver/preview/
+cam-patch/rawswitch/classes*
+cam-patch/probe/
+cam-patch/platform-10.zip
+cam-patch/platform10/
+
+# ===== 嵌套 git 仓库（SonyFTP 参考实现，独立管理）=====
+sonyftp-src/
+
+# ===== 一次性探测产物 =====
+cam-patch/dump/
+cam-patch/recon/
+cam-patch/filmstudio-src/
+cam-patch/logcat_*.txt
+android-arw-pull/termux-arm64.apk
+android-arw-pull/__pycache__/
+Sony-PMCA-RE/
