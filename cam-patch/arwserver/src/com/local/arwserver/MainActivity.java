@@ -131,12 +131,10 @@ public class MainActivity extends Activity {
         pwBox.addView(pwRow);
         panel.addView(pwBox);
 
-        // v44：恢复日志区上屏 —— 手机连接/请求入口的日志段（req GET / 等），面板只留
-        // 按钮 + 二维码 + 连接入口信息 + 这段日志，其余文字全部去掉
+        // v45：日志区不上屏（用户要求去掉）；logView 保留对象，setText 变无操作
         logView = new TextView(this);
         logView.setTextColor(Color.rgb(160, 255, 160));
         logView.setTextSize(11);
-        panel.addView(logView);
 
         mainBtn = new Button(this);
         mainBtn.setTextColor(Color.WHITE);
@@ -519,11 +517,10 @@ public class MainActivity extends Activity {
                 // v28：二维码按屏幅放大——模块尺寸 = min(可用宽, 可用高 62%) / 总模块数，
                 // 夹在 [4,24]。日志区撤掉后竖向空间全给码，手机更好对焦。
                 boolean[][] mods = QrCode.encode(payload);
-                int n = mods.length, quiet = 3;
-                android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
-                int per = Math.min((dm.widthPixels - 48) / (n + 2 * quiet),
-                        (int) (dm.heightPixels * 0.62) / (n + 2 * quiet));
-                int scale = Math.max(4, Math.min(per, 24));
+                // v45：继续放大——高度占比 0.70、模块上限 32、宽边距 24（日志区撤掉后高度全给码）
+                int per = Math.min((dm.widthPixels - 24) / (n + 2 * quiet),
+                        (int) (dm.heightPixels * 0.70) / (n + 2 * quiet));
+                int scale = Math.max(4, Math.min(per, 32));
                 Bitmap bm = renderQr(mods, scale, scale, quiet);
                 qrView.setImageBitmap(bm);
                 qrView.setMinimumWidth(bm.getWidth());
