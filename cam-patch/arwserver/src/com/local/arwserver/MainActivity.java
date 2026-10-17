@@ -80,7 +80,7 @@ public class MainActivity extends Activity {
         panel.setBackgroundColor(Color.argb(190, 0, 0, 0));
 
         TextView title = new TextView(this);
-        title.setText("ARW Server v41");
+        title.setText("ARW Server v43");
         title.setTextColor(Color.rgb(120, 220, 120));
         title.setTextSize(17);
         panel.addView(title);
@@ -127,6 +127,16 @@ public class MainActivity extends Activity {
             }
         });
         panel.addView(qrBtn);
+
+        // v43：修改密码按钮（点按进入密码设置；中央键长按的入口保留）
+        Button pwBtn = new Button(this);
+        pwBtn.setText("修改密码");
+        pwBtn.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                if (!pwMode) enterPwMode();   // 设置中重复点击忽略（防重置已输入的数字）
+            }
+        });
+        panel.addView(pwBtn);
 
         Button exitBtn = new Button(this);
         exitBtn.setText("停止并退出");

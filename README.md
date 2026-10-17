@@ -3,7 +3,7 @@
 > 让 A6000 通过自带 WiFi 传输 RAW：相机上装一个 53KB 的 App「发送到手机 RAW」，
 > 手机连相机热点、浏览器打开网页即可浏览和下载 ARW/JPG，零安装、零外网依赖。
 
-**当前版本：v42**（2026-10-17）· 完整工程记录见 `A6000-发送到手机-RAW-链路.md` 与 `A6000-WiFi-RAW-方案.md`
+**当前版本：v42**（2026-10-17）· GitHub：https://github.com/zhanghao0730/a6000-raw-transfer （公开仓库，含 v42 Release APK）· 完整工程记录见 `A6000-发送到手机-RAW-链路.md` 与 `A6000-WiFi-RAW-方案.md`
 
 ---
 
@@ -88,6 +88,8 @@ cd cam-patch/tools/httptest && bash run.sh
 | `项目文件地图.md` | 全项目文件索引 + 整理记录 |
 
 **不入库**（见 `.gitignore`，本机保留）：固件 dmg/7z、测试 ARW/JPG 基准、平台包、反编译参考（`imagingedge-ref/` 等）。
+
+> 本仓库**只包含「发送到手机 RAW」软件本体及其验证工装**。固件逆向脚本、PMCA 探测、历史路线等研究性内容未随此仓库分发。
 
 ---
 
